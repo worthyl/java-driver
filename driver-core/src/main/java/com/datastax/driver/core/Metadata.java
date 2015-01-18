@@ -400,6 +400,11 @@ public class Metadata {
         return sb.toString();
     }
 
+    Token.Factory tokenFactory() {
+        TokenMap current = tokenMap;
+        return (current == null) ? null : current.factory;
+    }
+
     static class TokenMap {
 
         private final Token.Factory factory;

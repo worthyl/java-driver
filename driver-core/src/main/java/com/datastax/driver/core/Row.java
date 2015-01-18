@@ -434,6 +434,33 @@ public interface Row extends GettableData {
     public InetAddress getInet(String name);
 
     /**
+     * Returns the {@code i}th value of this row as a {@link Token}.
+     *
+     * @param i the index ({@code 0 <= i < size()}) of the column to retrieve.
+     * @return the value of the {@code i}th column in this row as an Token.
+     * If the value is NULL, {@code null} is returned.
+     *
+     * @throws IndexOutOfBoundsException if {@code i < 0 || i >= this.columns().size()}.
+     * @throws InvalidTypeException if column {@code i} is not of the type of token values
+     * for this cluster (this depends on the configured partitioner).
+     */
+    public Token getToken(int i);
+
+    /**
+     * Returns the value of column {@code name} as a {@link Token}.
+     *
+     * @param name the name of the column to retrieve.
+     * @return the value of column {@code name} as a Token.
+     * If the value is NULL, {@code null} is returned.
+     *
+     * @throws IllegalArgumentException if {@code name} is not part of the
+     * ResultSet this row is part of, i.e. if {@code !this.columns().names().contains(name)}.
+     * @throws InvalidTypeException if column {@code name} is not of the type of token values
+     * for this cluster (this depends on the configured partitioner).
+     */
+    public Token getToken(String name);
+
+    /**
      * Returns the {@code i}th value of this row as a list.
      *
      * @param <T> the type of the elements of the list to return.

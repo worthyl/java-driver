@@ -195,6 +195,9 @@ public class BoundStatement extends Statement implements SettableData<BoundState
                     }
                     break;
                 default:
+                    if (toSet instanceof Token)
+                        toSet = ((Token)toSet).getValue();
+
                     Class<?> providedClass = toSet.getClass();
                     Class<?> expectedClass = columnType.getName().javaType;
                     if (!expectedClass.isAssignableFrom(providedClass))
