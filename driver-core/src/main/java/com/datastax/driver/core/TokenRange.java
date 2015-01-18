@@ -24,6 +24,8 @@ import com.google.common.base.Objects;
 /**
  * A range of tokens (start exclusive and end exclusive) on the Cassandra ring.
  * <p>
+ * Note that a range where start = end is considered empty.
+ * <p>
  * If you need to query all the partitions in a range, be sure to use the following pattern to properly handle all corner cases:
  * <pre>
  *     &nbsp;{@code
@@ -95,6 +97,70 @@ public final class TokenRange {
         }
         tokenRanges.add(new TokenRange(splitStart, end, factory));
         return tokenRanges;
+    }
+
+    /**
+     * Returns whether this range wraps around the maximum token.
+     *
+     * @return whether this range wraps around.
+     */
+    public boolean isWrappedAround() {
+        return start.compareTo(end) > 0;
+    }
+
+    /**
+     * Returns whether this range intersects another one.
+     *
+     * @param that the other range.
+     * @return whether they intersect.
+     */
+    public boolean intersects(TokenRange that) {
+        // Empty ranges never intersect any other range
+        if (this.start.equals(this.end) || that.start.equals(that.end))
+            return false;
+
+        return this.contains(that.start, true)
+            || this.contains(that.end, false)
+            || that.contains(this.start, true)
+            || that.contains(this.end, false);
+    }
+
+    private boolean contains(Token token, boolean isStart) {
+        boolean isAfterStart = isStart ? token.compareTo(start) >= 0 : token.compareTo(start) > 0;
+        boolean isBeforeEnd = isStart ? token.compareTo(end) < 0 : token.compareTo(end) <= 0;
+        return isWrappedAround()
+            ? isAfterStart || isBeforeEnd
+            : isAfterStart && isBeforeEnd;
+    }
+
+    /**
+     * Merges this range with another one.
+     *
+     * @param that the other range. It should either intersect this one or be adjacent; in other
+     *             words, the resulting merge should not include tokens that are in neither of the
+     *             original ranges.
+     * @return the resulting range.
+     *
+     * @throws IllegalArgumentException if the other range is not intersecting or adjacent.
+     */
+    public TokenRange mergeWith(TokenRange that) {
+        if (!(this.intersects(that) || this.end.equals(that.start) || that.end.equals(this.start)))
+            throw new IllegalArgumentException(String.format(
+                "Can't merge %s with %s because they neither intersect nor are adjacent",
+                this, that));
+
+        Token mergedStart, mergedEnd;
+        if (this.end.equals(that.start)) {
+            mergedStart = this.start;
+            mergedEnd = that.end;
+        } else if (that.end.equals(this.start)) {
+            mergedStart = that.start;
+            mergedEnd = this.end;
+        } else {
+            mergedStart = this.contains(that.start, true) ? this.start : that.start;
+            mergedEnd = this.contains(that.end, false) ? this.end : that.end;
+        }
+        return new TokenRange(mergedStart, mergedEnd, factory);
     }
 
     @Override
