@@ -22,7 +22,7 @@ import java.util.Set;
 import com.google.common.base.Objects;
 
 /**
- * A range of tokens on the Cassandra ring.
+ * A range of tokens (start exclusive and end exclusive) on the Cassandra ring.
  * <p>
  * If you need to query all the partitions in a range, be sure to use the following pattern to properly handle all corner cases:
  * <pre>
