@@ -123,6 +123,11 @@ abstract class AbstractAddressableByIndexData<T extends SettableByIndexData<T>> 
         return setValue(i, v == null ? null : TypeCodec.InetCodec.instance.serialize(v));
     }
 
+    public T setToken(int i, Token v) {
+        checkType(i, v.getType().getName());
+        return setValue(i, v.getType().codec(protocolVersion).serialize(v));
+    }
+
     public <E> T setList(int i, List<E> v) {
         DataType type = getType(i);
         if (type.getName() != DataType.Name.LIST)

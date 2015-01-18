@@ -66,20 +66,20 @@ public class MetadataTest {
                 List<Row> rows;
                 if (end.isMinToken()) {
                     rows = session.execute(after.bind()
-                        .setBytesUnsafe("start", start.getType().serialize(start.getValue()))).all();
+                        .setToken("start", start)).all();
                 } else if (start.compareTo(end) < 0) {
                     rows = session.execute(between.bind()
-                        .setBytesUnsafe("start", start.getType().serialize(start.getValue()))
-                        .setBytesUnsafe("end", end.getType().serialize(end.getValue()))).all();
+                        .setToken("start", start)
+                        .setToken("end", end)).all();
                 } else {
                     rows = Lists.newArrayList();
                     rows.addAll(
                         session.execute(after.bind()
-                            .setBytesUnsafe("start", start.getType().serialize(start.getValue()))).all()
+                            .setToken("start", start)).all()
                     );
                     rows.addAll(
                         session.execute(before.bind()
-                            .setBytesUnsafe("end", end.getType().serialize(end.getValue()))).all()
+                            .setToken("end", end)).all()
                     );
                 }
                 for (Row row : rows) {
