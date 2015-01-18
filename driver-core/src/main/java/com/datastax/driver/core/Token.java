@@ -264,7 +264,7 @@ public abstract class Token implements Comparable<Token> {
 
         @Override
         public String toString() {
-            return "M3PToken(" + value + ")";
+            return Long.toString(value);
         }
     }
 
@@ -393,7 +393,7 @@ public abstract class Token implements Comparable<Token> {
 
         @Override
         public String toString() {
-            return "OPPToken(" + Bytes.toHexString(value) + ")";
+            return Bytes.toHexString(value);
         }
     }
 
@@ -488,7 +488,7 @@ public abstract class Token implements Comparable<Token> {
 
         @Override
         public String toString() {
-            return "RPToken(" + value + ")";
+            return value.toString();
         }
     }
 }
