@@ -32,11 +32,18 @@ import com.datastax.driver.core.utils.Bytes;
 public abstract class Token implements Comparable<Token> {
 
     /**
-     * Returns a serialized representation of this token, suitable to bind in a statement.
+     * Returns the data type of this token's value.
      *
-     * @return the serialized representation.
+     * @return the datatype.
      */
-    public abstract ByteBuffer serialize();
+    public abstract DataType getType();
+
+    /**
+     * Returns the raw value of this token.
+     *
+     * @return the value.
+     */
+    public abstract Object getValue();
 
     /**
      * Returns whether this token is the minimum token on the ring.
@@ -253,8 +260,13 @@ public abstract class Token implements Comparable<Token> {
         }
 
         @Override
-        public ByteBuffer serialize() {
-            return DataType.bigint().serialize(value);
+        public DataType getType() {
+            return DataType.bigint();
+        }
+
+        @Override
+        public Object getValue() {
+            return value;
         }
 
         @Override
@@ -382,7 +394,12 @@ public abstract class Token implements Comparable<Token> {
         }
 
         @Override
-        public ByteBuffer serialize() {
+        public DataType getType() {
+            return DataType.blob();
+        }
+
+        @Override
+        public Object getValue() {
             return value;
         }
 
@@ -477,8 +494,13 @@ public abstract class Token implements Comparable<Token> {
         }
 
         @Override
-        public ByteBuffer serialize() {
-            return DataType.varint().serialize(value);
+        public DataType getType() {
+            return DataType.varint();
+        }
+
+        @Override
+        public Object getValue() {
+            return value;
         }
 
         @Override
