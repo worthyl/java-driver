@@ -15,6 +15,7 @@
  */
 package com.datastax.driver.core;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -87,8 +88,8 @@ public final class TokenRange {
      * @param numberOfSplits the number of splits to create.
      * @return the splits.
      */
-    public Set<TokenRange> splitEvenly(int numberOfSplits) {
-        Set<TokenRange> tokenRanges = new HashSet<TokenRange>();
+    public List<TokenRange> splitEvenly(int numberOfSplits) {
+        List<TokenRange> tokenRanges = new ArrayList<TokenRange>();
         List<Token> splitPoints = factory.split(start, end, numberOfSplits);
         Token splitStart = start;
         for (Token splitEnd : splitPoints) {
