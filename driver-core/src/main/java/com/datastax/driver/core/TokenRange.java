@@ -16,16 +16,13 @@
 package com.datastax.driver.core;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
 
 /**
  * A range of tokens (start exclusive and end exclusive) on the Cassandra ring.
- * <p>
- * Note that a range where start = end is considered empty.
  * <p>
  * If you need to query all the partitions in a range, be sure to use the following pattern to properly handle all corner cases:
  * <pre>
@@ -101,12 +98,43 @@ public final class TokenRange {
     }
 
     /**
+     * Returns whether this range is empty.
+     * <p>
+     * To be consistent with the behavior of CQL range queries, a range is considered empty when both ends are equal,
+     * except if they are the minimum token.
+     *
+     * @return whether the range is empty.
+     */
+    public boolean isEmpty() {
+        return start.equals(end) && !start.equals(factory.minToken());
+    }
+
+    /**
      * Returns whether this range wraps around the maximum token.
      *
      * @return whether this range wraps around.
      */
     public boolean isWrappedAround() {
-        return start.compareTo(end) > 0;
+        return start.compareTo(end) > 0 && !end.equals(factory.minToken());
+    }
+
+    /**
+     * Split this range into a list of non-wrapping ranges.
+     * <p>
+     * This is useful to perform range queries in CQL, which does not handle the wrapping.
+     * <p>
+     * This method will return the range itself if it is non-wrapping, or two ranges otherwise.
+     *
+     * @return the list of non-wrapping ranges.
+     */
+    public List<TokenRange> unwrap() {
+        if (isWrappedAround()) {
+            return ImmutableList.of(
+                new TokenRange(start, factory.minToken(), factory),
+                new TokenRange(factory.minToken(), end, factory));
+        } else {
+            return ImmutableList.of(this);
+        }
     }
 
     /**
@@ -117,7 +145,7 @@ public final class TokenRange {
      */
     public boolean intersects(TokenRange that) {
         // Empty ranges never intersect any other range
-        if (this.start.equals(this.end) || that.start.equals(that.end))
+        if (this.isEmpty() || that.isEmpty())
             return false;
 
         return this.contains(that.start, true)
@@ -128,7 +156,8 @@ public final class TokenRange {
 
     private boolean contains(Token token, boolean isStart) {
         boolean isAfterStart = isStart ? token.compareTo(start) >= 0 : token.compareTo(start) > 0;
-        boolean isBeforeEnd = isStart ? token.compareTo(end) < 0 : token.compareTo(end) <= 0;
+        boolean isBeforeEnd = end.equals(factory.minToken()) ||
+            (isStart ? token.compareTo(end) < 0 : token.compareTo(end) <= 0);
         return isWrappedAround()
             ? isAfterStart || isBeforeEnd
             : isAfterStart && isBeforeEnd;
@@ -145,23 +174,41 @@ public final class TokenRange {
      * @throws IllegalArgumentException if the other range is not intersecting or adjacent.
      */
     public TokenRange mergeWith(TokenRange that) {
+        if (this.equals(that))
+            return this;
+
         if (!(this.intersects(that) || this.end.equals(that.start) || that.end.equals(this.start)))
             throw new IllegalArgumentException(String.format(
                 "Can't merge %s with %s because they neither intersect nor are adjacent",
                 this, that));
 
-        Token mergedStart, mergedEnd;
-        if (this.end.equals(that.start)) {
-            mergedStart = this.start;
-            mergedEnd = that.end;
-        } else if (that.end.equals(this.start)) {
-            mergedStart = that.start;
-            mergedEnd = this.end;
-        } else {
-            mergedStart = this.contains(that.start, true) ? this.start : that.start;
-            mergedEnd = this.contains(that.end, false) ? this.end : that.end;
-        }
+        if (this.isEmpty())
+            return that;
+
+        if (that.isEmpty())
+            return this;
+
+        // That's actually "starts in or is adjacent to the end of"
+        boolean thisStartsInThat = that.contains(this.start, true) || this.start.equals(that.end);
+        boolean thatStartsInThis = this.contains(that.start, true) || that.start.equals(this.end);
+
+        // This takes care of all the cases that return the full ring, so that we don't have to worry about them below
+        if (thisStartsInThat && thatStartsInThis)
+            return fullRing();
+
+        // Starting at this.start, see how far we can go while staying in at least one of the ranges.
+        Token mergedEnd = (thatStartsInThis && !this.contains(that.end, false))
+            ? that.end
+            : this.end;
+
+        // Repeat in the other direction.
+        Token mergedStart = thisStartsInThat ? that.start : this.start;
+
         return new TokenRange(mergedStart, mergedEnd, factory);
+    }
+
+    private TokenRange fullRing() {
+        return new TokenRange(factory.minToken(), factory.minToken(), factory);
     }
 
     @Override
@@ -183,6 +230,6 @@ public final class TokenRange {
 
     @Override
     public String toString() {
-        return String.format("TokenRange(%s, %s)", start, end);
+        return String.format("]%s, %s]", start, end);
     }
 }

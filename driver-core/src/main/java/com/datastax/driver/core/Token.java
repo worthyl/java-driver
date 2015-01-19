@@ -45,13 +45,6 @@ public abstract class Token implements Comparable<Token> {
      */
     public abstract Object getValue();
 
-    /**
-     * Returns whether this token is the minimum token on the ring.
-     *
-     * @return whether this token is the minimum token on the ring
-     */
-    public abstract boolean isMinToken();
-
     static Token.Factory getFactory(String partitionerName) {
         if (partitionerName.endsWith("Murmur3Partitioner"))
             return M3PToken.FACTORY;
@@ -67,6 +60,8 @@ public abstract class Token implements Comparable<Token> {
         abstract Token fromString(String tokenStr);
         abstract DataType getTokenType();
         abstract Token deserialize(ByteBuffer buffer);
+        /** The minimum token is a special value that no key ever hashes to, it's used both as lower and upper bound. */
+        abstract Token minToken();
         abstract Token hash(ByteBuffer partitionKey);
         abstract List<Token> split(Token startToken, Token endToken, int numberOfSplits);
 
@@ -98,10 +93,13 @@ public abstract class Token implements Comparable<Token> {
     static class M3PToken extends Token {
         private final long value;
 
-        private static final BigInteger RING_END = BigInteger.valueOf(Long.MAX_VALUE);
-        private static final BigInteger RING_LENGTH = RING_END.add(BigInteger.ONE).subtract(BigInteger.valueOf(Long.MIN_VALUE));
+        public static final Factory FACTORY = new M3PTokenFactory();
 
-        public static final Factory FACTORY = new Factory() {
+        private static class M3PTokenFactory extends Factory {
+
+            private static final BigInteger RING_END = BigInteger.valueOf(Long.MAX_VALUE);
+            private static final BigInteger RING_LENGTH = RING_END.add(BigInteger.ONE).subtract(BigInteger.valueOf(Long.MIN_VALUE));
+            public static final M3PToken MIN_TOKEN = new M3PToken(Long.MIN_VALUE);
 
             private long getblock(ByteBuffer key, int offset, int index) {
                 int i_8 = index << 3;
@@ -217,6 +215,11 @@ public abstract class Token implements Comparable<Token> {
             }
 
             @Override
+            Token minToken() {
+                return MIN_TOKEN;
+            }
+
+            @Override
             public M3PToken hash(ByteBuffer partitionKey) {
                 long v = murmur(partitionKey);
                 return new M3PToken(v == Long.MIN_VALUE ? Long.MAX_VALUE : v);
@@ -243,7 +246,7 @@ public abstract class Token implements Comparable<Token> {
             protected Token newToken(BigInteger value) {
                 return new M3PToken(value.longValue());
             }
-        };
+        }
 
         private M3PToken(long value) {
             this.value = value;
@@ -257,11 +260,6 @@ public abstract class Token implements Comparable<Token> {
         @Override
         public Object getValue() {
             return value;
-        }
-
-        @Override
-        public boolean isMinToken() {
-            return value == Long.MIN_VALUE;
         }
 
         @Override
@@ -294,11 +292,15 @@ public abstract class Token implements Comparable<Token> {
 
     // OPPartitioner tokens
     static class OPPToken extends Token {
-        private static final BigInteger TWO = BigInteger.valueOf(2);
 
         private final ByteBuffer value;
 
-        public static final Factory FACTORY = new Factory() {
+        public static final Factory FACTORY = new OPPTokenFactory();
+
+        private static class OPPTokenFactory extends Factory {
+            private static final BigInteger TWO = BigInteger.valueOf(2);
+            private static final Token MIN_TOKEN = new OPPToken(ByteBuffer.allocate(0));
+
             @Override
             public OPPToken fromString(String tokenStr) {
                 return new OPPToken(TypeCodec.StringCodec.utf8Instance.serialize(tokenStr));
@@ -312,6 +314,11 @@ public abstract class Token implements Comparable<Token> {
             @Override
             Token deserialize(ByteBuffer buffer) {
                 return new OPPToken(buffer);
+            }
+
+            @Override
+            Token minToken() {
+                return MIN_TOKEN;
             }
 
             @Override
@@ -387,7 +394,7 @@ public abstract class Token implements Comparable<Token> {
                     target = bytes;
                 return new BigInteger(1, target);
             }
-        };
+        }
 
         @VisibleForTesting
         OPPToken(ByteBuffer value) {
@@ -402,11 +409,6 @@ public abstract class Token implements Comparable<Token> {
         @Override
         public Object getValue() {
             return value;
-        }
-
-        @Override
-        public boolean isMinToken() {
-            return value.capacity() == 0;
         }
 
         @Override
@@ -441,11 +443,14 @@ public abstract class Token implements Comparable<Token> {
 
         private final BigInteger value;
 
-        private static final BigInteger MIN_VALUE = BigInteger.ONE.negate();
-        private static final BigInteger MAX_VALUE = BigInteger.valueOf(2).pow(127);
-        private static final BigInteger RING_LENGTH = MAX_VALUE.add(BigInteger.ONE);
+        public static final Factory FACTORY = new RPTokenFactory();
 
-        public static final Factory FACTORY = new Factory() {
+        private static class RPTokenFactory extends Factory {
+
+            private static final BigInteger MIN_VALUE = BigInteger.ONE.negate();
+            private static final BigInteger MAX_VALUE = BigInteger.valueOf(2).pow(127);
+            private static final BigInteger RING_LENGTH = MAX_VALUE.add(BigInteger.ONE);
+            private static final Token MIN_TOKEN = new RPToken(MIN_VALUE);
 
             private BigInteger md5(ByteBuffer data) {
                 try {
@@ -470,6 +475,11 @@ public abstract class Token implements Comparable<Token> {
             @Override
             Token deserialize(ByteBuffer buffer) {
                 return new RPToken((BigInteger)getTokenType().deserialize(buffer));
+            }
+
+            @Override
+            Token minToken() {
+                return MIN_TOKEN;
             }
 
             @Override
@@ -512,11 +522,6 @@ public abstract class Token implements Comparable<Token> {
         @Override
         public Object getValue() {
             return value;
-        }
-
-        @Override
-        public boolean isMinToken() {
-            return value.equals(MIN_VALUE);
         }
 
         @Override

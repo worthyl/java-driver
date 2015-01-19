@@ -72,30 +72,13 @@ public abstract class MetadataTokenTest {
         // Iterate the cluster's token ranges. For each one, use a range query to ask Cassandra which partition keys
         // are in this range.
         Set<TokenRange> ranges = metadata.getTokenRanges();
-        PreparedStatement between = session.prepare("SELECT i FROM foo WHERE token(i) > :start and token(i) <= :end");
-        PreparedStatement after = session.prepare("SELECT i FROM foo WHERE token(i) > :start");
-        PreparedStatement before = session.prepare("SELECT i FROM foo WHERE token(i) <= :end");
         TokenRange foundRange = null;
         for (TokenRange range : ranges) {
-            Token start = range.getStart(), end = range.getEnd();
-            List<Row> rows;
-            if (end.isMinToken()) {
-                rows = session.execute(after.bind()
-                    .setToken("start", start)).all();
-            } else if (start.compareTo(end) < 0) {
-                rows = session.execute(between.bind()
-                    .setToken("start", start)
-                    .setToken("end", end)).all();
-            } else {
-                rows = Lists.newArrayList();
-                rows.addAll(
-                    session.execute(after.bind()
-                        .setToken("start", start)).all()
-                );
-                rows.addAll(
-                    session.execute(before.bind()
-                        .setToken("end", end)).all()
-                );
+            List<Row> rows = Lists.newArrayList();
+            for (TokenRange subRange : range.unwrap()) {
+                rows.addAll(session.execute("SELECT i FROM foo WHERE token(i) > ? and token(i) <= ?",
+                    subRange.getStart(), subRange.getEnd())
+                    .all());
             }
             for (Row row : rows) {
                 if (row.getInt("i") == testKey) {

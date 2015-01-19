@@ -28,4 +28,14 @@ public class TokenRangeAssert extends AbstractAssert<TokenRangeAssert, TokenRang
             .isFalse();
         return this;
     }
+
+    public TokenRangeAssert unwrapsToItself() {
+        assertThat(actual.unwrap()).containsExactly(actual);
+        return this;
+    }
+
+    public TokenRangeAssert unwrapsTo(TokenRange... subRanges) {
+        assertThat(actual.unwrap()).containsExactly(subRanges);
+        return this;
+    }
 }
