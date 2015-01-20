@@ -1,8 +1,10 @@
 package com.datastax.driver.core;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import com.beust.jcommander.internal.Sets;
 import com.google.common.collect.Lists;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -16,10 +18,11 @@ import static com.datastax.driver.core.Assertions.assertThat;
  * There's normally a way to parametrize a TestNG class with @Factory and @DataProvider,
  * but it doesn't seem to work with multiple methods.
  */
-public abstract class MetadataTokenTest {
+public abstract class TokenIntegrationTest {
 
     List<String> schema = Lists.newArrayList(
         "CREATE KEYSPACE IF NOT EXISTS test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+        "CREATE KEYSPACE IF NOT EXISTS test2 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}",
         "USE test",
         "CREATE TABLE IF NOT EXISTS foo(i int primary key)",
         "INSERT INTO foo (i) VALUES (1)",
@@ -33,7 +36,7 @@ public abstract class MetadataTokenTest {
     Cluster cluster;
     Session session;
 
-    public MetadataTokenTest(String ccmOptions, DataType expectedTokenType) {
+    public TokenIntegrationTest(String ccmOptions, DataType expectedTokenType) {
         this.ccmOptions = ccmOptions;
         this.expectedTokenType = expectedTokenType;
     }
@@ -110,5 +113,43 @@ public abstract class MetadataTokenTest {
 
         row = session.execute("SELECT * FROM foo WHERE token(i) = ?", token).one();
         assertThat(row.getInt(0)).isEqualTo(1);
+    }
+
+    @Test(groups = "short")
+    public void should_expose_token_ranges_per_host() {
+        checkRangesPerHost("test", 1);
+        checkRangesPerHost("test2", 2);
+    }
+
+    private void checkRangesPerHost(String keyspace, int replicationFactor) {
+        Set<TokenRange> allRanges = Sets.newHashSet();
+
+        // Get each host's ranges, the count should match the replication factor
+        for (int i = 1; i <= 3; i++) {
+            Host host = TestUtils.findHost(cluster, i);
+            Set<TokenRange> hostRanges = cluster.getMetadata().getTokenRanges(keyspace, host);
+            assertThat(hostRanges).hasSize(replicationFactor);
+            allRanges.addAll(hostRanges);
+        }
+
+        // Once we ignore duplicates, the number of ranges should match the number of nodes.
+        assertThat(allRanges).hasSize(3);
+        Iterator<TokenRange> it = allRanges.iterator();
+        TokenRange range1 = it.next();
+        TokenRange range2 = it.next();
+        TokenRange range3 = it.next();
+
+        // No two ranges should intersect
+        assertThat(range1)
+            .doesNotIntersect(range2)
+            .doesNotIntersect(range3);
+        assertThat(range2)
+            .doesNotIntersect(range3);
+
+        // And the ranges should cover the whole ring
+        TokenRange mergedRange = range1.mergeWith(range2.mergeWith(range3));
+        boolean isFullRing = mergedRange.getStart().equals(mergedRange.getEnd())
+            && !mergedRange.isEmpty();
+        assertThat(isFullRing).isTrue();
     }
 }

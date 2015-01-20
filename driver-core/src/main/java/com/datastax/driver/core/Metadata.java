@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -285,6 +286,31 @@ public class Metadata {
     }
 
     /**
+     * Returns the token ranges that are replicated on the given host, for the given
+     * keyspace.
+     *
+     * @param keyspace the name of the keyspace to get token ranges for.
+     * @param host the host.
+     * @return the (immutable) set of token ranges for {@code host} as known
+     * by the driver.
+     */
+    public Set<TokenRange> getTokenRanges(String keyspace, Host host) {
+        keyspace = handleId(keyspace);
+        TokenMap current = tokenMap;
+        if (current == null) {
+            return Collections.emptySet();
+        } else {
+            Map<Host, Set<TokenRange>> dcRanges = current.hostsToRanges.get(keyspace);
+            if (dcRanges == null) {
+                return Collections.emptySet();
+            } else {
+                Set<TokenRange> ranges = dcRanges.get(host);
+                return (ranges == null) ? Collections.<TokenRange>emptySet() : ranges;
+            }
+        }
+    }
+
+    /**
      * Returns the set of hosts that are replica for a given partition key.
      * <p>
      * Note that this method is a best effort method. Consumers should not rely
@@ -293,7 +319,10 @@ public class Metadata {
      * @param keyspace the name of the keyspace to get replicas for.
      * @param partitionKey the partition key for which to find the set of
      * replica.
-     * @return the (immutable) s3).
+     * @return the (immutable) set of replicas for {@code partitionKey} as known
+     * by the driver. No strong guarantee is provided on the stalelessness of
+     * this information. It is also not guarantee that the returned set won't
+     * be empty (which is then some form of staleness).
      */
     public Set<Host> getReplicas(String keyspace, ByteBuffer partitionKey) {
         keyspace = handleId(keyspace);
@@ -408,14 +437,19 @@ public class Metadata {
     static class TokenMap {
 
         private final Token.Factory factory;
+        private final Map<String, Map<Host, Set<TokenRange>>> hostsToRanges;
         private final Map<Token, Host> tokenToPrimary;
         private final Map<String, Map<Token, Set<Host>>> tokenToHosts;
         private final List<Token> ring;
         private final Set<TokenRange> tokenRanges;
         final Set<Host> hosts;
 
-        private TokenMap(Token.Factory factory, Map<Token, Host> tokenToPrimary, Map<String, Map<Token, Set<Host>>> tokenToHosts, List<Token> ring, Set<TokenRange> tokenRanges, Set<Host> hosts) {
+        private TokenMap(Token.Factory factory, Map<Token, Host> tokenToPrimary,
+                         Map<String, Map<Token, Set<Host>>> tokenToHosts,
+                         Map<String, Map<Host, Set<TokenRange>>> hostsToRanges,
+                         List<Token> ring, Set<TokenRange> tokenRanges, Set<Host> hosts) {
             this.factory = factory;
+            this.hostsToRanges = hostsToRanges;
             this.tokenToPrimary = Collections.unmodifiableMap(tokenToPrimary);
             this.tokenToHosts = tokenToHosts;
             this.ring = ring;
@@ -446,6 +480,7 @@ public class Metadata {
             Set<TokenRange> tokenRanges = makeTokenRanges(ring, factory);
 
             Map<String, Map<Token, Set<Host>>> tokenToHosts = new HashMap<String, Map<Token, Set<Host>>>();
+            Map<String, Map<Host, Set<TokenRange>>> hostsToRanges = new HashMap<String, Map<Host, Set<TokenRange>>>();
             for (KeyspaceMetadata keyspace : keyspaces)
             {
                 ReplicationStrategy strategy = keyspace.replicationStrategy();
@@ -454,8 +489,11 @@ public class Metadata {
                     : strategy.computeTokenToReplicaMap(tokenToPrimary, ring);
 
                 tokenToHosts.put(keyspace.getName(), ksTokens);
+
+                Map<Host, Set<TokenRange>> ksRanges = computeHostsToRangesMap(tokenRanges, ksTokens, hosts.size());
+                hostsToRanges.put(keyspace.getName(), ksRanges);
             }
-            return new TokenMap(factory, tokenToPrimary, tokenToHosts, ring, tokenRanges, hosts);
+            return new TokenMap(factory, tokenToPrimary, tokenToHosts, hostsToRanges, ring, tokenRanges, hosts);
         }
 
         private Set<Host> getReplicas(String keyspace, Token token) {
@@ -490,6 +528,26 @@ public class Metadata {
                 builder.add(new TokenRange(start, end, factory));
             }
             return builder.build();
+        }
+
+        private static Map<Host, Set<TokenRange>> computeHostsToRangesMap(Set<TokenRange> tokenRanges, Map<Token, Set<Host>> ksTokens, int hostCount) {
+            Map<Host, ImmutableSet.Builder<TokenRange>> builders = Maps.newHashMapWithExpectedSize(hostCount);
+            for (TokenRange range : tokenRanges) {
+                Set<Host> replicas = ksTokens.get(range.getEnd());
+                for (Host host : replicas) {
+                    ImmutableSet.Builder<TokenRange> hostRanges = builders.get(host);
+                    if (hostRanges == null) {
+                        hostRanges = ImmutableSet.builder();
+                        builders.put(host, hostRanges);
+                    }
+                    hostRanges.add(range);
+                }
+            }
+            Map<Host, Set<TokenRange>> ksRanges = Maps.newHashMapWithExpectedSize(hostCount);
+            for (Map.Entry<Host, ImmutableSet.Builder<TokenRange>> entry : builders.entrySet()) {
+                ksRanges.put(entry.getKey(), entry.getValue().build());
+            }
+            return ksRanges;
         }
     }
 }
