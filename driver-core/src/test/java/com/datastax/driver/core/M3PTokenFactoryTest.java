@@ -22,8 +22,8 @@ public class M3PTokenFactoryTest {
     public void should_split_range_that_wraps_around_the_ring() {
         List<Token> splits = factory.split(factory.fromString("4611686018427387904"), factory.fromString("0"), 3);
         assertThat(splits).containsExactly(
-            factory.fromString("-9223372036854775808"),
-            factory.fromString("-4611686018427387904")
+            factory.fromString("-9223372036854775807"),
+            factory.fromString("-4611686018427387903")
         );
     }
 
@@ -44,6 +44,34 @@ public class M3PTokenFactoryTest {
             factory.fromString("2"),
             factory.fromString("2"),
             factory.fromString("2")
+        );
+    }
+
+    @Test(groups = "unit")
+    public void should_split_range_producing_empty_splits_near_ring_end() {
+        Token minToken = factory.fromString("-9223372036854775808");
+        Token maxToken = factory.fromString("9223372036854775807");
+
+        // These are edge cases where we want to make sure we don't accidentally generate the ]min,min] range (which is the whole ring)
+        List<Token> splits = factory.split(maxToken, minToken, 3);
+        assertThat(splits).containsExactly(
+            maxToken,
+            maxToken
+        );
+
+        splits = factory.split(minToken, factory.fromString("-9223372036854775807"), 3);
+        assertThat(splits).containsExactly(
+            factory.fromString("-9223372036854775807"),
+            factory.fromString("-9223372036854775807")
+        );
+    }
+
+    @Test(groups = "unit")
+    public void should_split_whole_ring() {
+        List<Token> splits = factory.split(factory.fromString("-9223372036854775808"), factory.fromString("-9223372036854775808"), 3);
+        assertThat(splits).containsExactly(
+            factory.fromString("-3074457345618258603"),
+            factory.fromString("3074457345618258602")
         );
     }
 }

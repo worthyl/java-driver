@@ -60,11 +60,18 @@ public final class TokenRange {
 
     /**
      * Splits this range into a number of smaller ranges of equal "size" (referring to the number of tokens, not the actual amount of data).
+     * <p>
+     * Splitting an empty range is not permitted. But note that, in edge cases, splitting a range might produce one or more empty ranges.
      *
      * @param numberOfSplits the number of splits to create.
      * @return the splits.
+     *
+     * @throws IllegalArgumentException if the range is empty.
      */
     public List<TokenRange> splitEvenly(int numberOfSplits) {
+        if (isEmpty())
+            throw new IllegalArgumentException("Can't split empty range " + this);
+
         List<TokenRange> tokenRanges = new ArrayList<TokenRange>();
         List<Token> splitPoints = factory.split(start, end, numberOfSplits);
         Token splitStart = start;

@@ -98,8 +98,9 @@ public abstract class Token implements Comparable<Token> {
         private static class M3PTokenFactory extends Factory {
 
             private static final BigInteger RING_END = BigInteger.valueOf(Long.MAX_VALUE);
-            private static final BigInteger RING_LENGTH = RING_END.add(BigInteger.ONE).subtract(BigInteger.valueOf(Long.MIN_VALUE));
+            private static final BigInteger RING_LENGTH = RING_END.subtract(BigInteger.valueOf(Long.MIN_VALUE));
             public static final M3PToken MIN_TOKEN = new M3PToken(Long.MIN_VALUE);
+            public static final M3PToken MAX_TOKEN = new M3PToken(Long.MAX_VALUE);
 
             private long getblock(ByteBuffer key, int offset, int index) {
                 int i_8 = index << 3;
@@ -227,8 +228,9 @@ public abstract class Token implements Comparable<Token> {
 
             @Override
             List<Token> split(Token startToken, Token endToken, int numberOfSplits) {
-                if (startToken.compareTo(endToken) == 0)
-                    throw new IllegalArgumentException("Cannot split range with equal bounds");
+                // edge case: ]min, min] means the whole ring
+                if (startToken.equals(endToken) && startToken.equals(MIN_TOKEN))
+                    endToken = MAX_TOKEN;
 
                 BigInteger start = BigInteger.valueOf(((M3PToken)startToken).value);
                 BigInteger end = BigInteger.valueOf(((M3PToken)endToken).value);
@@ -329,8 +331,11 @@ public abstract class Token implements Comparable<Token> {
             @Override
             public List<Token> split(Token startToken, Token endToken, int numberOfSplits) {
                 int tokenOrder = startToken.compareTo(endToken);
-                if (tokenOrder == 0)
-                    throw new IllegalArgumentException("Cannot split range with equal bounds");
+
+                // ]min,min] means the whole ring. However, since there is no "max token" with this partitioner, we can't come up
+                // with a magic end value that would cover the whole ring
+                if (tokenOrder == 0 && startToken.equals(MIN_TOKEN))
+                    throw new IllegalArgumentException("Cannot split whole ring with ordered partitioner");
 
                 OPPToken oppStartToken = (OPPToken)startToken;
                 OPPToken oppEndToken = (OPPToken)endToken;
@@ -451,6 +456,7 @@ public abstract class Token implements Comparable<Token> {
             private static final BigInteger MAX_VALUE = BigInteger.valueOf(2).pow(127);
             private static final BigInteger RING_LENGTH = MAX_VALUE.add(BigInteger.ONE);
             private static final Token MIN_TOKEN = new RPToken(MIN_VALUE);
+            private static final Token MAX_TOKEN = new RPToken(MAX_VALUE);
 
             private BigInteger md5(ByteBuffer data) {
                 try {
@@ -489,8 +495,9 @@ public abstract class Token implements Comparable<Token> {
 
             @Override
             List<Token> split(Token startToken, Token endToken, int numberOfSplits) {
-                if (startToken.compareTo(endToken) == 0)
-                    throw new IllegalArgumentException("Cannot split range with equal bounds");
+                // edge case: ]min, min] means the whole ring
+                if (startToken.equals(endToken) && startToken.equals(MIN_TOKEN))
+                    endToken = MAX_TOKEN;
 
                 BigInteger start = ((RPToken)startToken).value;
                 BigInteger end = ((RPToken)endToken).value;
