@@ -22,33 +22,12 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 
 /**
- * A range of tokens (start exclusive and end exclusive) on the Cassandra ring.
+ * A range of tokens on the Cassandra ring.
  * <p>
- * If you need to query all the partitions in a range, be sure to use the following pattern to properly handle all corner cases:
- * <pre>
- *     &nbsp;{@code
- *     PreparedStatement between = session.prepare("SELECT i FROM foo WHERE token(i) > :start and token(i) <= :end");
- *     PreparedStatement after = session.prepare("SELECT i FROM foo WHERE token(i) > :start");
- *     PreparedStatement before = session.prepare("SELECT i FROM foo WHERE token(i) <= :end");
- *
- *     Token start = range.getStart(), end = range.getEnd();
- *     if (end.isMinToken() {
- *         session.execute(after.bind()
- *             .setBytesUnsafe("start", start.serialize()));
- *     } else if (start.compareTo(end) < 0) {
- *         session.execute(between.bind()
- *             .setBytesUnsafe("start", start.serialize())
- *             .setBytesUnsafe("end", end.serialize()));
- *     } else {
- *         // The range wraps around the end of the ring.
- *         // Two queries (combine the results depending on how you consume them).
- *         session.execute(after.bind()
- *             .setBytesUnsafe("start", start.serialize()));
- *         session.execute(before.bind()
- *             .setBytesUnsafe("end", end.serialize()));
- *     }
- * }
- * </pre>
+ * A range is start-exclusive and end-inclusive. It is empty when start and end are the same token, except if that is the minimum
+ * token, in which case the range covers the whole ring (this is consistent with the behavior of CQL range queries).
+ * <p>
+ * Note that CQL does not handle wrapping. To query all partitions in a range, see {@link #unwrap()}.
  */
 public final class TokenRange {
     private final Token start;
@@ -80,7 +59,7 @@ public final class TokenRange {
     }
 
     /**
-     * Split this range into a number of smaller ranges of equal "size" (referring to the number of tokens, not the actual amount of data).
+     * Splits this range into a number of smaller ranges of equal "size" (referring to the number of tokens, not the actual amount of data).
      *
      * @param numberOfSplits the number of splits to create.
      * @return the splits.
@@ -100,8 +79,9 @@ public final class TokenRange {
     /**
      * Returns whether this range is empty.
      * <p>
-     * To be consistent with the behavior of CQL range queries, a range is considered empty when both ends are equal,
-     * except if they are the minimum token.
+     * A range is empty when start and end are the same token, except if that is the minimum token,
+     * in which case the range covers the whole ring (this is consistent with the behavior of CQL
+     * range queries).
      *
      * @return whether the range is empty.
      */
@@ -110,7 +90,7 @@ public final class TokenRange {
     }
 
     /**
-     * Returns whether this range wraps around the maximum token.
+     * Returns whether this range wraps around the end of the ring.
      *
      * @return whether this range wraps around.
      */
@@ -119,11 +99,25 @@ public final class TokenRange {
     }
 
     /**
-     * Split this range into a list of non-wrapping ranges.
+     * Splits this range into a list of two non-wrapping ranges. This will return the range itself if it is
+     * non-wrapping, or two ranges otherwise.
      * <p>
-     * This is useful to perform range queries in CQL, which does not handle the wrapping.
+     * For example:
+     * <ul>
+     *     <li>{@code ]1,10]} unwraps to itself;</li>
+     *     <li>{@code ]10,1]} unwraps to {@code ]10,min_token]} and {@code ]min_token,1]}.</li>
+     * </ul>
      * <p>
-     * This method will return the range itself if it is non-wrapping, or two ranges otherwise.
+     * This is useful for CQL range queries, which do not handle wrapping:
+     * <pre>
+     * {@code
+     * List<Row> rows = new ArrayList<Row>();
+     * for (TokenRange subRange : range.unwrap()) {
+     *     ResultSet rs = session.execute("SELECT * FROM mytable WHERE token(pk) > ? and token(pk) <= ?",
+     *                                    subRange.getStart(), subRange.getEnd());
+     *     rows.addAll(rs.all());
+     * }
+     * }</pre>
      *
      * @return the list of non-wrapping ranges.
      */
@@ -139,6 +133,12 @@ public final class TokenRange {
 
     /**
      * Returns whether this range intersects another one.
+     * <p>
+     * For example:
+     * <ul>
+     *     <li>{@code ]3,5]} intersects {@code ]1,4]}, {@code ]4,5]}...</li>
+     *     <li>{@code ]3,5]} does not intersect {@code ]1,2]}, {@code ]2,3]}, {@code ]5,7]}...</li>
+     * </ul>
      *
      * @param that the other range.
      * @return whether they intersect.
@@ -154,6 +154,9 @@ public final class TokenRange {
             || that.contains(this.end, false);
     }
 
+    // isStart handles the case where the token is the start of another range, for example:
+    // * ]1,2] contains 2, but it does not contain the start of ]2,3]
+    // * ]1,2] does not contain 1, but it contains the start of ]1,3]
     private boolean contains(Token token, boolean isStart) {
         boolean isAfterStart = isStart ? token.compareTo(start) >= 0 : token.compareTo(start) > 0;
         boolean isBeforeEnd = end.equals(factory.minToken()) ||
@@ -165,13 +168,22 @@ public final class TokenRange {
 
     /**
      * Merges this range with another one.
+     * <p>
+     * The two ranges should either intersect or be adjacent; in other words, the merged range
+     * should not include tokens that are in neither of the original ranges.
+     * <p>
+     * For example:
+     * <ul>
+     *     <li>merging {@code ]3,5]} with {@code ]4,7]} produces {@code ]3,7]};</li>
+     *     <li>merging {@code ]3,5]} with {@code ]4,5]} produces {@code ]3,5]};</li>
+     *     <li>merging {@code ]3,5]} with {@code ]5,8]} produces {@code ]3,8]};</li>
+     *     <li>merging {@code ]3,5]} with {@code ]6,8]} fails.</li>
+     * </ul>
      *
-     * @param that the other range. It should either intersect this one or be adjacent; in other
-     *             words, the resulting merge should not include tokens that are in neither of the
-     *             original ranges.
+     * @param that the other range.
      * @return the resulting range.
      *
-     * @throws IllegalArgumentException if the other range is not intersecting or adjacent.
+     * @throws IllegalArgumentException if the ranges neither intersect nor are adjacent.
      */
     public TokenRange mergeWith(TokenRange that) {
         if (this.equals(that))
