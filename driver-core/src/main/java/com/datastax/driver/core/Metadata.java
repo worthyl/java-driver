@@ -265,17 +265,6 @@ public class Metadata {
     }
 
     /**
-     * Returns a map from each token to the host that owns it (without taking replication into
-     * consideration).
-     *
-     * @return the token map.
-     */
-    public Map<Token, Host> getTokenMap() {
-        TokenMap current = tokenMap;
-        return (current == null) ? Collections.<Token, Host>emptyMap() : current.tokenToPrimary;
-    }
-
-    /**
      * Returns the token ranges that define data distribution in the ring.
      *
      * @return the token ranges.
@@ -348,6 +337,7 @@ public class Metadata {
         if (current == null) {
             return Collections.emptySet();
         } else {
+            // TODO cache this for "primary" token ranges (i.e. the ones we return from getTokenRanges)
             Set<Host> hosts = current.getReplicas(keyspace, range.getEnd());
             return hosts == null ? Collections.<Host>emptySet() : hosts;
         }
@@ -438,29 +428,33 @@ public class Metadata {
 
         private final Token.Factory factory;
         private final Map<String, Map<Host, Set<TokenRange>>> hostsToRanges;
-        private final Map<Token, Host> tokenToPrimary;
         private final Map<String, Map<Token, Set<Host>>> tokenToHosts;
         private final List<Token> ring;
         private final Set<TokenRange> tokenRanges;
         final Set<Host> hosts;
 
-        private TokenMap(Token.Factory factory, Map<Token, Host> tokenToPrimary,
+        private TokenMap(Token.Factory factory,
+                         Map<Host, Set<Token>> primaryToTokens,
                          Map<String, Map<Token, Set<Host>>> tokenToHosts,
                          Map<String, Map<Host, Set<TokenRange>>> hostsToRanges,
                          List<Token> ring, Set<TokenRange> tokenRanges, Set<Host> hosts) {
             this.factory = factory;
             this.hostsToRanges = hostsToRanges;
-            this.tokenToPrimary = Collections.unmodifiableMap(tokenToPrimary);
             this.tokenToHosts = tokenToHosts;
             this.ring = ring;
             this.tokenRanges = tokenRanges;
             this.hosts = hosts;
+            for (Map.Entry<Host, Set<Token>> entry : primaryToTokens.entrySet()) {
+                Host host = entry.getKey();
+                host.setTokens(ImmutableSet.copyOf(entry.getValue()));
+            }
         }
 
         public static TokenMap build(Token.Factory factory, Map<Host, Collection<String>> allTokens, Collection<KeyspaceMetadata> keyspaces) {
 
             Set<Host> hosts = allTokens.keySet();
             Map<Token, Host> tokenToPrimary = new HashMap<Token, Host>();
+            Map<Host, Set<Token>> primaryToTokens = new HashMap<Host, Set<Token>>();
             Set<Token> allSorted = new TreeSet<Token>();
 
             for (Map.Entry<Host, Collection<String>> entry : allTokens.entrySet()) {
@@ -470,6 +464,12 @@ public class Metadata {
                         Token t = factory.fromString(tokenStr);
                         allSorted.add(t);
                         tokenToPrimary.put(t, host);
+                        Set<Token> hostTokens = primaryToTokens.get(host);
+                        if (hostTokens == null) {
+                            hostTokens = new HashSet<Token>();
+                            primaryToTokens.put(host, hostTokens);
+                        }
+                        hostTokens.add(t);
                     } catch (IllegalArgumentException e) {
                         // If we failed parsing that token, skip it
                     }
@@ -493,7 +493,7 @@ public class Metadata {
                 Map<Host, Set<TokenRange>> ksRanges = computeHostsToRangesMap(tokenRanges, ksTokens, hosts.size());
                 hostsToRanges.put(keyspace.getName(), ksRanges);
             }
-            return new TokenMap(factory, tokenToPrimary, tokenToHosts, hostsToRanges, ring, tokenRanges, hosts);
+            return new TokenMap(factory, primaryToTokens, tokenToHosts, hostsToRanges, ring, tokenRanges, hosts);
         }
 
         private Set<Host> getReplicas(String keyspace, Token token) {

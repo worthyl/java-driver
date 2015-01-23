@@ -1,5 +1,6 @@
 package com.datastax.driver.core;
 
+import java.net.InetSocketAddress;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -9,6 +10,10 @@ import com.google.common.collect.Lists;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
+
+import com.datastax.driver.core.policies.LoadBalancingPolicy;
+import com.datastax.driver.core.policies.RoundRobinPolicy;
+import com.datastax.driver.core.policies.WhiteListPolicy;
 
 import static com.datastax.driver.core.Assertions.assertThat;
 
@@ -44,8 +49,14 @@ public abstract class TokenIntegrationTest {
     @BeforeClass(groups = "short")
     public void setup() {
         ccm = CCMBridge.create("test", 3, ccmOptions);
+
+        // Only connect to node 1, which makes it easier to query system tables in should_expose_tokens_per_host()
+        LoadBalancingPolicy lbp = new WhiteListPolicy(new RoundRobinPolicy(),
+            Lists.newArrayList(new InetSocketAddress(CCMBridge.ipOfNode(1), 9042)));
+
         cluster = Cluster.builder()
             .addContactPoints(CCMBridge.ipOfNode(1))
+            .withLoadBalancingPolicy(lbp)
             .build();
         cluster.init();
         session = cluster.connect();
@@ -74,15 +85,9 @@ public abstract class TokenIntegrationTest {
 
         // Iterate the cluster's token ranges. For each one, use a range query to ask Cassandra which partition keys
         // are in this range.
-        Set<TokenRange> ranges = metadata.getTokenRanges();
         TokenRange foundRange = null;
-        for (TokenRange range : ranges) {
-            List<Row> rows = Lists.newArrayList();
-            for (TokenRange subRange : range.unwrap()) {
-                rows.addAll(session.execute("SELECT i FROM foo WHERE token(i) > ? and token(i) <= ?",
-                    subRange.getStart(), subRange.getEnd())
-                    .all());
-            }
+        for (TokenRange range : metadata.getTokenRanges()) {
+            List<Row> rows = rangeQuery("SELECT i FROM foo WHERE token(i) > ? and token(i) <= ?", range);
             for (Row row : rows) {
                 if (row.getInt("i") == testKey) {
                     // We should find our test key exactly once
@@ -96,6 +101,16 @@ public abstract class TokenIntegrationTest {
             }
         }
         assertThat(foundRange).isNotNull();
+    }
+
+    private List<Row> rangeQuery(String query, TokenRange range) {
+        List<Row> rows = Lists.newArrayList();
+        for (TokenRange subRange : range.unwrap()) {
+            rows.addAll(session.execute(query,
+                subRange.getStart(), subRange.getEnd())
+                .all());
+        }
+        return rows;
     }
 
     @Test(groups = "short")
@@ -152,4 +167,27 @@ public abstract class TokenIntegrationTest {
             && !mergedRange.isEmpty();
         assertThat(isFullRing).isTrue();
     }
+
+    @Test(groups = "short")
+    public void should_expose_tokens_per_host() {
+        for (Host host : cluster.getMetadata().allHosts()) {
+            // We don't use virtual nodes in this test, so there is only one token
+            assertThat(host.getTokens()).hasSize(1);
+            Token tokenFromMetadata = host.getTokens().iterator().next();
+
+            // Check against the info in the system tables, which is a bit weak since it's exactly how the metadata is
+            // constructed in the first place, but there's not much else we can do.
+            // Note that this relies on all queries going to node 1, which is why we use a WhiteList LBP in setup().
+            Row row = (host.listenAddress == null)
+                ? session.execute("select tokens from system.local").one()
+                : session.execute("select tokens from system.peers where peer = ?", host.listenAddress).one();
+            Set<String> tokenStrings = row.getSet("tokens", String.class);
+            assertThat(tokenStrings).hasSize(1);
+            Token tokenFromSystemTable = tokenFactory().fromString(tokenStrings.iterator().next());
+
+            assertThat(tokenFromMetadata).isEqualTo(tokenFromSystemTable);
+        }
+    }
+
+    protected abstract Token.Factory tokenFactory();
 }
