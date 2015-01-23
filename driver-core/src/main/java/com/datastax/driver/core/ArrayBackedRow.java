@@ -79,7 +79,7 @@ class ArrayBackedRow extends AbstractGettableData implements Row {
         if (value == null || value.remaining() == 0)
             return null;
 
-        return tokenFactory.deserialize(value);
+        return tokenFactory.deserialize(value, protocolVersion);
     }
 
     @Override

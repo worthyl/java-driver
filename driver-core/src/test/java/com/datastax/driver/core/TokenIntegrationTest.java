@@ -60,6 +60,9 @@ public abstract class TokenIntegrationTest {
             .build();
         cluster.init();
         session = cluster.connect();
+
+        for (String statement : schema)
+            session.execute(statement);
     }
 
     @AfterClass(groups = "short")
@@ -73,9 +76,6 @@ public abstract class TokenIntegrationTest {
     @Test(groups = "short")
     public void should_expose_token_ranges() throws Exception {
         Metadata metadata = cluster.getMetadata();
-
-        for (String statement : schema)
-            session.execute(statement);
 
         // Find the replica for a given partition key
         int testKey = 1;
@@ -115,18 +115,18 @@ public abstract class TokenIntegrationTest {
 
     @Test(groups = "short")
     public void should_get_token_from_row_and_set_token_in_query() {
-        Row row = session.execute("SELECT token(i) FROM foo WHERE i = 1").one();
+        Row row = session.execute("SELECT token(i) FROM test.foo WHERE i = 1").one();
         Token token = row.getToken(0);
         assertThat(token.getType()).isEqualTo(expectedTokenType);
 
-        PreparedStatement pst = session.prepare("SELECT * FROM foo WHERE token(i) = ?");
+        PreparedStatement pst = session.prepare("SELECT * FROM test.foo WHERE token(i) = ?");
         row = session.execute(pst.bind(token)).one();
         assertThat(row.getInt(0)).isEqualTo(1);
 
         row = session.execute(pst.bind().setToken(0, token)).one();
         assertThat(row.getInt(0)).isEqualTo(1);
 
-        row = session.execute("SELECT * FROM foo WHERE token(i) = ?", token).one();
+        row = session.execute("SELECT * FROM test.foo WHERE token(i) = ?", token).one();
         assertThat(row.getInt(0)).isEqualTo(1);
     }
 

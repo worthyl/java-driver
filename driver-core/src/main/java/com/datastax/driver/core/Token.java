@@ -59,7 +59,7 @@ public abstract class Token implements Comparable<Token> {
     static abstract class Factory {
         abstract Token fromString(String tokenStr);
         abstract DataType getTokenType();
-        abstract Token deserialize(ByteBuffer buffer);
+        abstract Token deserialize(ByteBuffer buffer, ProtocolVersion protocolVersion);
         /** The minimum token is a special value that no key ever hashes to, it's used both as lower and upper bound. */
         abstract Token minToken();
         abstract Token hash(ByteBuffer partitionKey);
@@ -211,8 +211,8 @@ public abstract class Token implements Comparable<Token> {
             }
 
             @Override
-            Token deserialize(ByteBuffer buffer) {
-                return new M3PToken((Long) getTokenType().deserialize(buffer));
+            Token deserialize(ByteBuffer buffer, ProtocolVersion protocolVersion) {
+                return new M3PToken((Long) getTokenType().deserialize(buffer, protocolVersion));
             }
 
             @Override
@@ -314,7 +314,7 @@ public abstract class Token implements Comparable<Token> {
             }
 
             @Override
-            Token deserialize(ByteBuffer buffer) {
+            Token deserialize(ByteBuffer buffer, ProtocolVersion protocolVersion) {
                 return new OPPToken(buffer);
             }
 
@@ -479,8 +479,8 @@ public abstract class Token implements Comparable<Token> {
             }
 
             @Override
-            Token deserialize(ByteBuffer buffer) {
-                return new RPToken((BigInteger)getTokenType().deserialize(buffer));
+            Token deserialize(ByteBuffer buffer, ProtocolVersion protocolVersion) {
+                return new RPToken((BigInteger)getTokenType().deserialize(buffer, protocolVersion));
             }
 
             @Override
