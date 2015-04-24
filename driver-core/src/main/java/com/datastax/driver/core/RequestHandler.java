@@ -111,7 +111,7 @@ class RequestHandler {
         // Clone the request after the first execution, since we set the streamId on it later and we
         // don't want to share that across executions.
         if (position > 1)
-            request = manager.makeRequestMessage(statement, request.pagingState()) ;
+            request = request.copy();
 
         SpeculativeExecution execution = new SpeculativeExecution(request, position);
         runningExecutions.add(execution);

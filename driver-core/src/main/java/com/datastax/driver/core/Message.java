@@ -50,6 +50,10 @@ abstract class Message {
 
     protected Message() {}
 
+    protected Message(int streamId) {
+        this.streamId = streamId;
+    }
+
     public Message setStreamId(int streamId) {
         this.streamId = streamId;
         return this;
@@ -95,6 +99,21 @@ abstract class Message {
         protected Request(Type type) {
             this.type = type;
         }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Request(Request toCopy) {
+            super(toCopy.getStreamId());
+            this.type = toCopy.type;
+            this.tracingRequested = toCopy.tracingRequested;
+        }
+
+        /**
+         * @return a copy (clone) of the current message.
+         */
+        public abstract Request copy();
 
         public void setTracingRequested() {
             this.tracingRequested = true;

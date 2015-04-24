@@ -21,7 +21,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 
 class Requests {
@@ -56,6 +59,20 @@ class Requests {
             this.options = map.build();
         }
 
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Startup(Startup toCopy) {
+            super(toCopy);
+            this.options =  ImmutableMap.copyOf(toCopy.options);
+        }
+
+        @Override
+        public Startup copy() {
+            return new Startup(this);
+        }
+
         @Override
         public String toString() {
             return "STARTUP " + options;
@@ -82,6 +99,20 @@ class Requests {
             super(Message.Request.Type.CREDENTIALS);
             this.credentials = credentials;
         }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Credentials(Credentials toCopy) {
+            super(toCopy);
+            this.credentials = ImmutableMap.copyOf(toCopy.credentials);
+        }
+
+        @Override
+        public Credentials copy() {
+            return new Credentials(this);
+        }
     }
 
     public static class Options extends Message.Request {
@@ -97,6 +128,19 @@ class Requests {
 
         public Options() {
             super(Message.Request.Type.OPTIONS);
+        }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Options(Options toCopy) {
+            super(toCopy);
+        }
+
+        @Override
+        public Options copy() {
+            return new Options(this);
         }
 
         @Override
@@ -144,6 +188,21 @@ class Requests {
             this.options = options;
         }
 
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Query(Query toCopy) {
+            super(toCopy);
+            this.query = toCopy.query;
+            this.options = new QueryProtocolOptions(toCopy.options);
+        }
+
+        @Override
+        public Query copy() {
+            return new Query(this);
+        }
+
         @Override
         public String toString() {
             return "QUERY " + query + '(' + options + ')';
@@ -185,6 +244,21 @@ class Requests {
             super(Message.Request.Type.EXECUTE);
             this.statementId = statementId;
             this.options = options;
+        }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Execute(Execute toCopy) {
+            super(toCopy);
+            this.statementId = toCopy.statementId;
+            this.options = new QueryProtocolOptions(toCopy.options);
+        }
+
+        @Override
+        public Execute copy() {
+            return new Execute(this);
         }
 
         @Override
@@ -262,6 +336,19 @@ class Requests {
                 flags.add(Flag.PAGING_STATE);
             if (serialConsistency != ConsistencyLevel.SERIAL)
                 flags.add(Flag.SERIAL_CONSISTENCY);
+        }
+
+        protected QueryProtocolOptions(QueryProtocolOptions toCopy) {
+            // this is a shallow copy as the new instance
+            // will share references to the same byte buffers
+            // but this is ok as they are meant to be duplicate()d
+            // later, see CBUtil
+            this(toCopy.consistency,
+                ImmutableList.copyOf(toCopy.values),
+                toCopy.skipMetadata,
+                toCopy.pageSize,
+                toCopy.pagingState,
+                toCopy.serialConsistency);
         }
 
         public void encode(ByteBuf dest) {
@@ -360,6 +447,24 @@ class Requests {
             this.consistency = consistency;
         }
 
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Batch(Batch toCopy) {
+            super(toCopy);
+            this.type = toCopy.type;
+            // objects in this list are either Strings or MD5Digests, hence immutable
+            this.queryOrIdList = ImmutableList.copyOf(toCopy.queryOrIdList);
+            this.values = ImmutableList.copyOf(toCopy.values);
+            this.consistency = toCopy.consistency;
+        }
+
+        @Override
+        public Batch copy() {
+            return new Batch(this);
+        }
+
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
@@ -393,6 +498,20 @@ class Requests {
             this.query = query;
         }
 
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Prepare(Prepare toCopy) {
+            super(toCopy);
+            this.query = toCopy.query;
+        }
+
+        @Override
+        public Prepare copy() {
+            return new Prepare(this);
+        }
+
         @Override
         public String toString() {
             return "PREPARE " + query;
@@ -420,7 +539,21 @@ class Requests {
 
         public Register(List<ProtocolEvent.Type> eventTypes) {
             super(Message.Request.Type.REGISTER);
-            this.eventTypes = eventTypes;
+            this.eventTypes = ImmutableList.copyOf(eventTypes);
+        }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected Register(Register toCopy) {
+            super(toCopy);
+            this.eventTypes = ImmutableList.copyOf(toCopy.eventTypes);
+        }
+
+        @Override
+        public Register copy() {
+            return new Register(this);
         }
 
         @Override
@@ -447,6 +580,20 @@ class Requests {
         public AuthResponse(byte[] token) {
             super(Message.Request.Type.AUTH_RESPONSE);
             this.token = token;
+        }
+
+        /**
+         * Copy constructor.
+         * @param toCopy the instance to copy
+         */
+        protected AuthResponse(AuthResponse toCopy) {
+            super(toCopy);
+            this.token = toCopy.token.clone();
+        }
+
+        @Override
+        public AuthResponse copy() {
+            return new AuthResponse(this);
         }
     }
 }
