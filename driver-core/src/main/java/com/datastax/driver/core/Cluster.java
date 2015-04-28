@@ -1512,7 +1512,7 @@ public class Cluster implements Closeable {
                     } catch (ExecutionException e) {
                         Throwable t = e.getCause();
                         // That future is not really supposed to throw unexpected exceptions
-                        if (!(t instanceof InterruptedException))
+                        if (!(t instanceof InterruptedException) && !(t instanceof CancellationException))
                             logger.error("Unexpected error while marking node UP: while this shouldn't happen, this shouldn't be critical", t);
                     }
 
@@ -1783,7 +1783,7 @@ public class Cluster implements Closeable {
                     } catch (ExecutionException e) {
                         Throwable t = e.getCause();
                         // That future is not really supposed to throw unexpected exceptions
-                        if (!(t instanceof InterruptedException))
+                        if (!(t instanceof InterruptedException) && !(t instanceof CancellationException))
                             logger.error("Unexpected error while adding node: while this shouldn't happen, this shouldn't be critical", t);
                     }
 
