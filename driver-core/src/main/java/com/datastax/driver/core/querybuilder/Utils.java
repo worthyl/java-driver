@@ -50,6 +50,15 @@ abstract class Utils {
         return sb;
     }
 
+    static StringBuilder joinAndAppendNamesRaw(StringBuilder sb, String separator, List<?> values) {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0)
+                sb.append(separator);
+            appendNameRaw(values.get(i), sb);
+        }
+        return sb;
+    }
+
     static StringBuilder joinAndAppendValues(StringBuilder sb, String separator, List<?> values, List<Object> variables) {
         for (int i = 0; i < values.size(); i++) {
             if (i > 0)
@@ -286,6 +295,12 @@ abstract class Utils {
         return sb;
     }
 
+    static StringBuilder appendNameRaw(String name, StringBuilder sb) {
+        name = name.trim();
+        sb.append(name);
+        return sb;
+    }
+
     static StringBuilder appendName(Object name, StringBuilder sb) {
         if (name instanceof String) {
             appendName((String)name, sb);
@@ -304,6 +319,15 @@ abstract class Utils {
             Alias alias = (Alias)name;
             appendName(alias.column, sb);
             sb.append(" AS ").append(alias.alias);
+        } else {
+            throw new IllegalArgumentException(String.format("Invalid column %s of type unknown of the query builder", name));
+        }
+        return sb;
+    }
+
+    static StringBuilder appendNameRaw(Object name, StringBuilder sb) {
+        if (name instanceof String) {
+            appendNameRaw((String)name, sb);
         } else {
             throw new IllegalArgumentException(String.format("Invalid column %s of type unknown of the query builder", name));
         }

@@ -22,7 +22,7 @@ import static com.datastax.driver.core.querybuilder.QueryBuilder.quote;
 
 abstract class ColumnMapper<T> {
 
-    public enum Kind { PARTITION_KEY, CLUSTERING_COLUMN, REGULAR };
+    public enum Kind { PARTITION_KEY, CLUSTERING_COLUMN, REGULAR, COMPUTED };
 
     private final String columnName;
     protected final String fieldName;
@@ -51,7 +51,9 @@ abstract class ColumnMapper<T> {
     public abstract void setValue(T entity, Object value);
 
     public String getColumnName() {
-        return quote(columnName);
+        return kind == Kind.COMPUTED
+            ? columnName
+            : quote(columnName);
     }
 
     public DataType getDataType() {

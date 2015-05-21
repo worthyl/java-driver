@@ -64,14 +64,21 @@ class QueryType {
                                   ? insertInto(mapper.getKeyspace(), mapper.getTable())
                                   : insertInto(table);
                     for (ColumnMapper<?> cm : mapper.allColumns())
-                        insert.value(cm.getColumnName(), bindMarker());
+                        if (cm.kind != ColumnMapper.Kind.COMPUTED)
+                            insert.value(cm.getColumnName(), bindMarker());
                     return insert.toString();
                 }
             case GET:
                 {
+                    ArrayList<String> columns = new ArrayList<String>();
+                    for (ColumnMapper cm : mapper.allColumns()){
+                        columns.add(cm.getColumnName());
+                    }
+                    String[] columnsArray = new String[columns.size()];
+                    columnsArray = columns.toArray(columnsArray);
                     Select select = table == null
-                                  ? select().all().from(mapper.getKeyspace(), mapper.getTable())
-                                  : select().all().from(table);
+                                  ? select(true, columnsArray).from(mapper.getKeyspace(), mapper.getTable())
+                                  : select(true, columnsArray).from(table);
                     Select.Where where = select.where();
                     for (int i = 0; i < mapper.primaryKeySize(); i++)
                         where.and(eq(mapper.getPrimaryKeyColumn(i).getColumnName(), bindMarker()));

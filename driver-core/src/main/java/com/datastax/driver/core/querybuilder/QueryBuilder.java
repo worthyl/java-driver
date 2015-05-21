@@ -53,6 +53,24 @@ public final class QueryBuilder {
     }
 
     /**
+     * Start building a new SELECT query that selects the provided names. The names used will be used
+     * in their raw format.
+     *
+     * Note that {@code select(c1, c2)} is just a shortcut for {@code select().column(c1).column(c2) }.
+     * Note also that using this method is not generally recommended for normal usage.
+     *
+     * @param raw whether the names will be used in raw format. Using this method with
+     *            {@code raw} as false would be the same than using
+     *            {@link com.datastax.driver.core.querybuilder.QueryBuilder#select()}
+     *            without the boolean parameter.
+     * @param columns the columns names that should be selected by the query.
+     * @return an in-construction SELECT query (you will need to provide at
+     * least a FROM clause to complete the query).
+     */
+    public static Select.Builder select(boolean raw, String... columns) {
+        return new Select.Builder(raw, Arrays.asList((Object[])columns));
+    }
+    /**
      * Start building a new SELECT query.
      *
      * @return an in-construction SELECT query (you will need to provide a

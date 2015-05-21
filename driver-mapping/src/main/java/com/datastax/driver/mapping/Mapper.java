@@ -123,8 +123,10 @@ public class Mapper<T> {
         BoundStatement bs = ps.bind();
         int i = 0;
         for (ColumnMapper<T> cm : mapper.allColumns()) {
-            Object value = cm.getValue(entity);
-            bs.setBytesUnsafe(i++, value == null ? null : cm.getDataType().serialize(value, protocolVersion));
+            if(cm.kind != ColumnMapper.Kind.COMPUTED) {
+                Object value = cm.getValue(entity);
+                bs.setBytesUnsafe(i++, value == null ? null : cm.getDataType().serialize(value, protocolVersion));
+            }
         }
 
         if (mapper.writeConsistency != null)

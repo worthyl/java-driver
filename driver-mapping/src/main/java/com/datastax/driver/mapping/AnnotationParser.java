@@ -186,12 +186,14 @@ class AnnotationParser {
     public static ColumnMapper.Kind kind(Field field) {
         PartitionKey pk = field.getAnnotation(PartitionKey.class);
         ClusteringColumn cc = field.getAnnotation(ClusteringColumn.class);
+        Column col = field.getAnnotation(Column.class);
         if (pk != null && cc != null)
             throw new IllegalArgumentException("Field " + field.getName() + " cannot have both the @PartitionKey and @ClusteringColumn annotations");
 
         return pk != null
-             ? ColumnMapper.Kind.PARTITION_KEY
-             : (cc != null ? ColumnMapper.Kind.CLUSTERING_COLUMN : ColumnMapper.Kind.REGULAR);
+            ? ColumnMapper.Kind.PARTITION_KEY
+            : (cc != null ? ColumnMapper.Kind.CLUSTERING_COLUMN
+                          : (col != null && col.computed() ? ColumnMapper.Kind.COMPUTED : ColumnMapper.Kind.REGULAR));
     }
 
     public static EnumType enumType(Field field) {
