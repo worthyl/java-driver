@@ -18,6 +18,7 @@ package com.datastax.driver.core;
 import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import io.netty.buffer.ByteBuf;
@@ -48,6 +49,13 @@ abstract class Message {
 
     private volatile int streamId;
 
+    /**
+     * A generic key-value custom payload. Custom payloads are simply
+     * ignored by the default QueryHandler implementation server-side.
+     * @since Protocol V4
+     */
+    private volatile Map<String, byte[]> customPayload;
+
     protected Message() {}
 
     public Message setStreamId(int streamId) {
@@ -57,6 +65,15 @@ abstract class Message {
 
     public int getStreamId() {
         return streamId;
+    }
+
+    public Map<String, byte[]> getCustomPayload() {
+        return customPayload;
+    }
+
+    public Message setCustomPayload(Map<String, byte[]> customPayload) {
+        this.customPayload = customPayload;
+        return this;
     }
 
     public static abstract class Request extends Message {
@@ -198,11 +215,19 @@ abstract class Message {
         @Override
         protected void decode(ChannelHandlerContext ctx, Frame frame, List<Object> out) throws Exception {
             boolean isTracing = frame.header.flags.contains(Frame.Header.Flag.TRACING);
+            boolean isCustomPayload = frame.header.flags.contains(Frame.Header.Flag.CUSTOM_PAYLOAD);
             UUID tracingId = isTracing ? CBUtil.readUUID(frame.body) : null;
+            Map<String, byte[]> customPayload = isCustomPayload ? CBUtil.readBytesMap(frame.body) : null;
 
             try {
+                if (isCustomPayload && frame.header.version.compareTo(ProtocolVersion.V4) < 0)
+                    throw frame.header.version.unsupported();
+
                 Response response = Response.Type.fromOpcode(frame.header.opcode).decoder.decode(frame.body, frame.header.version);
-                response.setTracingId(tracingId).setStreamId(frame.header.streamId);
+                response
+                    .setTracingId(tracingId)
+                    .setCustomPayload(customPayload)
+                    .setStreamId(frame.header.streamId);
                 out.add(response);
             } finally {
                 frame.body.release();
@@ -224,12 +249,23 @@ abstract class Message {
             EnumSet<Frame.Header.Flag> flags = EnumSet.noneOf(Frame.Header.Flag.class);
             if (request.isTracingRequested())
                 flags.add(Frame.Header.Flag.TRACING);
+            Map<String, byte[]> payload = request.getCustomPayload();
+            if (payload != null) {
+                if (protocolVersion.compareTo(ProtocolVersion.V4) < 0)
+                    throw protocolVersion.unsupported();
+                flags.add(Frame.Header.Flag.CUSTOM_PAYLOAD);
+            }
 
             @SuppressWarnings("unchecked")
             Coder<Request> coder = (Coder<Request>)request.type.coder;
-            ByteBuf body = ctx.alloc().buffer(coder.encodedSize(request, protocolVersion));
-            coder.encode(request, body, protocolVersion);
+            int messageSize = coder.encodedSize(request, protocolVersion);
+            if (payload != null)
+                messageSize += CBUtil.sizeOfBytesMap(payload);
+            ByteBuf body = ctx.alloc().buffer(messageSize);
+            if (payload != null)
+                CBUtil.writeBytesMap(payload, body);
 
+            coder.encode(request, body, protocolVersion);
             out.add(Frame.create(protocolVersion, request.type.opcode, request.getStreamId(), flags, body));
         }
     }
