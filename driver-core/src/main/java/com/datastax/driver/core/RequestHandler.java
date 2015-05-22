@@ -180,6 +180,9 @@ class RequestHandler {
             }
             if (execution.retryConsistencyLevel != null)
                 info = info.withAchievedConsistency(execution.retryConsistencyLevel);
+            if(response.getCustomPayload() != null)
+                info = info.withCustomPayload(response.getCustomPayload());
+
             callback.onSet(connection, response, info, statement, System.nanoTime() - startTime);
         } catch (Exception e) {
             callback.onException(connection,

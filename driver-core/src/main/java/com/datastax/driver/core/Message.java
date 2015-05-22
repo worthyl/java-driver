@@ -54,7 +54,7 @@ abstract class Message {
      * ignored by the default QueryHandler implementation server-side.
      * @since Protocol V4
      */
-    private volatile Map<String, byte[]> customPayload;
+    private volatile CustomPayload customPayload;
 
     protected Message() {}
 
@@ -67,11 +67,11 @@ abstract class Message {
         return streamId;
     }
 
-    public Map<String, byte[]> getCustomPayload() {
+    public CustomPayload getCustomPayload() {
         return customPayload;
     }
 
-    public Message setCustomPayload(Map<String, byte[]> customPayload) {
+    public Message setCustomPayload(CustomPayload customPayload) {
         this.customPayload = customPayload;
         return this;
     }
@@ -217,7 +217,7 @@ abstract class Message {
             boolean isTracing = frame.header.flags.contains(Frame.Header.Flag.TRACING);
             boolean isCustomPayload = frame.header.flags.contains(Frame.Header.Flag.CUSTOM_PAYLOAD);
             UUID tracingId = isTracing ? CBUtil.readUUID(frame.body) : null;
-            Map<String, byte[]> customPayload = isCustomPayload ? CBUtil.readBytesMap(frame.body) : null;
+            CustomPayload customPayload = isCustomPayload ? new CustomPayload.DefaultCustomPayload(CBUtil.readBytesMap(frame.body)) : null;
 
             try {
                 if (isCustomPayload && frame.header.version.compareTo(ProtocolVersion.V4) < 0)
@@ -249,7 +249,7 @@ abstract class Message {
             EnumSet<Frame.Header.Flag> flags = EnumSet.noneOf(Frame.Header.Flag.class);
             if (request.isTracingRequested())
                 flags.add(Frame.Header.Flag.TRACING);
-            Map<String, byte[]> payload = request.getCustomPayload();
+            CustomPayload payload = request.getCustomPayload();
             if (payload != null) {
                 if (protocolVersion.compareTo(ProtocolVersion.V4) < 0)
                     throw protocolVersion.unsupported();
@@ -259,11 +259,12 @@ abstract class Message {
             @SuppressWarnings("unchecked")
             Coder<Request> coder = (Coder<Request>)request.type.coder;
             int messageSize = coder.encodedSize(request, protocolVersion);
-            if (payload != null)
-                messageSize += CBUtil.sizeOfBytesMap(payload);
+            Map<String, byte[]> payloadBytesMap = request.getCustomPayload() == null ? null : request.getCustomPayload().asBytesMap();
+            if (payloadBytesMap != null)
+                messageSize += CBUtil.sizeOfBytesMap(payloadBytesMap);
             ByteBuf body = ctx.alloc().buffer(messageSize);
-            if (payload != null)
-                CBUtil.writeBytesMap(payload, body);
+            if (payloadBytesMap != null)
+                CBUtil.writeBytesMap(payloadBytesMap, body);
 
             coder.encode(request, body, protocolVersion);
             out.add(Frame.create(protocolVersion, request.type.opcode, request.getStreamId(), flags, body));

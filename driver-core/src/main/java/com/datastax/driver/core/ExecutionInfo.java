@@ -30,36 +30,42 @@ public class ExecutionInfo {
     private final ByteBuffer pagingState;
     private final ProtocolVersion protocolVersion;
     private final Statement statement;
+    private final CustomPayload customPayload;
     private volatile boolean schemaInAgreement;
 
-    private ExecutionInfo(List<Host> triedHosts, ConsistencyLevel achievedConsistency, QueryTrace trace, ByteBuffer pagingState, ProtocolVersion protocolVersion, Statement statement, boolean schemaAgreement) {
+    private ExecutionInfo(List<Host> triedHosts, ConsistencyLevel achievedConsistency, QueryTrace trace, ByteBuffer pagingState, ProtocolVersion protocolVersion, Statement statement, CustomPayload customPayload, boolean schemaAgreement) {
         this.triedHosts = triedHosts;
         this.achievedConsistency = achievedConsistency;
         this.trace = trace;
         this.pagingState = pagingState;
         this.protocolVersion = protocolVersion;
         this.statement = statement;
+        this.customPayload = customPayload;
         this.schemaInAgreement = schemaAgreement;
     }
 
     ExecutionInfo(List<Host> triedHosts) {
-        this(triedHosts, null, null, null, null, null, true);
+        this(triedHosts, null, null, null, null, null, null, true);
     }
 
     ExecutionInfo withTrace(QueryTrace newTrace) {
-        return new ExecutionInfo(triedHosts, achievedConsistency, newTrace, pagingState, protocolVersion, statement, schemaInAgreement);
+        return new ExecutionInfo(triedHosts, achievedConsistency, newTrace, pagingState, protocolVersion, statement, customPayload, schemaInAgreement);
     }
 
     ExecutionInfo withAchievedConsistency(ConsistencyLevel newConsistency) {
-        return new ExecutionInfo(triedHosts, newConsistency, trace, pagingState, protocolVersion, statement, schemaInAgreement);
+        return new ExecutionInfo(triedHosts, newConsistency, trace, pagingState, protocolVersion, statement, customPayload, schemaInAgreement);
     }
 
     ExecutionInfo withPagingState(ByteBuffer pagingState, ProtocolVersion protocolVersion) {
-        return new ExecutionInfo(triedHosts, achievedConsistency, trace, pagingState, protocolVersion, statement, schemaInAgreement);
+        return new ExecutionInfo(triedHosts, achievedConsistency, trace, pagingState, protocolVersion, statement, customPayload, schemaInAgreement);
     }
 
     ExecutionInfo withStatement(Statement statement) {
-        return new ExecutionInfo(triedHosts, achievedConsistency, trace, pagingState, protocolVersion, statement, schemaInAgreement);
+        return new ExecutionInfo(triedHosts, achievedConsistency, trace, pagingState, protocolVersion, statement, customPayload, schemaInAgreement);
+    }
+
+    ExecutionInfo withCustomPayload(CustomPayload customPayload) {
+        return new ExecutionInfo(triedHosts, achievedConsistency, trace, pagingState, protocolVersion, statement, customPayload, schemaInAgreement);
     }
 
     /**
@@ -186,5 +192,19 @@ public class ExecutionInfo {
 
     void setSchemaInAgreement(boolean schemaAgreement) {
         this.schemaInAgreement = schemaAgreement;
+    }
+
+    /**
+     * Return the custom payload that the server sent back with its response, if any,
+     * or {@code null}, if the server did not include any custom payload.
+     * <p>
+     * <strong>IMPORTANT:</strong> Custom payloads are available from protocol version 4 onwards.
+     * Under lower protocol versions, this method will always return {@code null}.
+     *
+     * @return the custom payload that the server sent back with its response, if any,
+     * or {@code null}, if the server did not include any custom payload
+     */
+    public CustomPayload getCustomPayload() {
+        return customPayload;
     }
 }
