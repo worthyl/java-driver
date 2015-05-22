@@ -15,8 +15,10 @@
  */
 package com.datastax.driver.core;
 
+import java.util.HashMap;
 import java.util.Map;
 
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 
 /**
@@ -85,12 +87,11 @@ public interface CustomPayload {
 
         @Override
         public CustomPayload merge(CustomPayload other) {
-            ImmutableMap<String, byte[]> merged = ImmutableMap.<String, byte[]>builder()
-                .putAll(map)
-                .putAll(other.asBytesMap())
-                .build();
+            HashMap<String, byte[]> merged = new HashMap<String, byte[]>(map);
+            merged.putAll(other.asBytesMap());
             return new DefaultCustomPayload(merged);
         }
+
     }
 
 }
