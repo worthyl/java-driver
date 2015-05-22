@@ -59,7 +59,7 @@ public interface CustomPayloadAwareSession extends Session {
      * @throws QueryValidationException if the query if invalid (syntax error,
      * unauthorized or any other validation problem).
      */
-    public ResultSet execute(String query, CustomPayload customPayload);
+    ResultSet executeWithPayload(String query, CustomPayload customPayload);
 
     /**
      * Executes the provided query using the provided values and the provided custom payload.
@@ -84,7 +84,7 @@ public interface CustomPayloadAwareSession extends Session {
      * is in use (i.e. if you've force version 1 through {@link Cluster.Builder#withProtocolVersion}
      * or you use Cassandra 1.2).
      */
-    public ResultSet execute(String query, CustomPayload customPayload, Object... values);
+    ResultSet executeWithPayload(String query, CustomPayload customPayload, Object... values);
 
     /**
      * Executes the provided query with the provided custom payload.
@@ -113,7 +113,7 @@ public interface CustomPayloadAwareSession extends Session {
      * the version protocol 1 include: BatchStatement, ResultSet paging and binary
      * values in RegularStatement.
      */
-    public ResultSet execute(Statement statement, CustomPayload customPayload);
+    ResultSet executeWithPayload(Statement statement, CustomPayload customPayload);
 
     /**
      * Executes the provided query asynchronously with the provided custom payload.
@@ -124,7 +124,7 @@ public interface CustomPayloadAwareSession extends Session {
      * @param customPayload the custom payload to send with the request
      * @return a future on the result of the query.
      */
-    public ResultSetFuture executeAsync(String query, CustomPayload customPayload);
+    ResultSetFuture executeAsyncWithPayload(String query, CustomPayload customPayload);
 
     /**
      * Executes the provided query asynchronously using the provided values and the provided custom payload.
@@ -141,7 +141,7 @@ public interface CustomPayloadAwareSession extends Session {
      * is in use (i.e. if you've force version 1 through {@link Cluster.Builder#withProtocolVersion}
      * or you use Cassandra 1.2).
      */
-    public ResultSetFuture executeAsync(String query, CustomPayload customPayload, Object... values);
+    ResultSetFuture executeAsyncWithPayload(String query, CustomPayload customPayload, Object... values);
 
     /**
      * Executes the provided query asynchronously with the provided custom payload.
@@ -165,7 +165,7 @@ public interface CustomPayloadAwareSession extends Session {
      * the version protocol 1 include: BatchStatement, ResultSet paging and binary
      * values in RegularStatement.
      */
-    public ResultSetFuture executeAsync(Statement statement, CustomPayload customPayload);
+    ResultSetFuture executeAsyncWithPayload(Statement statement, CustomPayload customPayload);
 
     /**
      * Prepares the provided query string with the provided custom payload.
@@ -177,7 +177,7 @@ public interface CustomPayloadAwareSession extends Session {
      * @throws NoHostAvailableException if no host in the cluster can be
      * contacted successfully to prepare this query.
      */
-    public PreparedStatement prepare(String query, CustomPayload customPayload);
+    PreparedStatement prepareWithPayload(String query, CustomPayload customPayload);
 
     /**
      * Prepares the provided query with the provided custom payload.
@@ -208,12 +208,12 @@ public interface CustomPayloadAwareSession extends Session {
      * though the {@link PreparedStatement#bind} method or through a corresponding
      * {@link BoundStatement}).
      */
-    public PreparedStatement prepare(RegularStatement statement, CustomPayload customPayload);
+    PreparedStatement prepareWithPayload(RegularStatement statement, CustomPayload customPayload);
 
     /**
      * Prepares the provided query string asynchronously with the provided custom payload.
      * <p>
-     * This method is equivalent to {@link #prepare(String, CustomPayload)} except that it
+     * This method is equivalent to {@link #prepareWithPayload(String, CustomPayload)} except that it
      * does not block but return a future instead. Any error during preparation will
      * be thrown when accessing the future, not by this method itself.
      *
@@ -221,12 +221,12 @@ public interface CustomPayloadAwareSession extends Session {
      * @param customPayload the custom payload to send with the request
      * @return a future on the prepared statement corresponding to {@code query}.
      */
-    public ListenableFuture<PreparedStatement> prepareAsync(String query, CustomPayload customPayload);
+    ListenableFuture<PreparedStatement> prepareAsyncWithPayload(String query, CustomPayload customPayload);
 
     /**
      * Prepares the provided query asynchronously with the provided custom payload.
      * <p>
-     * This method is essentially a shortcut for {@code prepareAsync(statement.getQueryString(), customPayload)},
+     * This method is essentially a shortcut for {@code prepareAsyncWithPayload(statement.getQueryString(), customPayload)},
      * but with the additional effect that the resulting {@code
      * PreparedStatement} will inherit the query properties set on {@code statement}.
      * <p>
@@ -246,6 +246,6 @@ public interface CustomPayloadAwareSession extends Session {
      * though the {@link PreparedStatement#bind} method or through a corresponding
      * {@link BoundStatement}).
      */
-    public ListenableFuture<PreparedStatement> prepareAsync(RegularStatement statement, CustomPayload customPayload);
+    ListenableFuture<PreparedStatement> prepareAsyncWithPayload(RegularStatement statement, CustomPayload customPayload);
 
 }

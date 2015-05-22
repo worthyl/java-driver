@@ -94,7 +94,7 @@ class SessionManager extends AbstractCustomPayloadAwareSession {
     }
 
     @Override
-    public ResultSetFuture executeAsync(Statement statement, CustomPayload customPayload) {
+    public ResultSetFuture executeAsyncWithPayload(Statement statement, CustomPayload customPayload) {
         CustomPayload statementCustomPayload = statement.getCustomPayload();
         if(customPayload != null) {
             if(statementCustomPayload == null) {
@@ -107,7 +107,7 @@ class SessionManager extends AbstractCustomPayloadAwareSession {
     }
 
     @Override
-    public ListenableFuture<PreparedStatement> prepareAsync(String query, CustomPayload customPayload) {
+    public ListenableFuture<PreparedStatement> prepareAsyncWithPayload(String query, CustomPayload customPayload) {
         Requests.Prepare request = new Requests.Prepare(query);
         request.setCustomPayload(customPayload);
         Connection.Future future = new Connection.Future(request);

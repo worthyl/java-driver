@@ -32,49 +32,49 @@ public abstract class AbstractCustomPayloadAwareSession extends AbstractSession 
      * {@inheritDoc}
      */
     @Override
-    public ResultSet execute(String query, CustomPayload customPayload) {
-        return execute(new SimpleStatement(query), customPayload);
+    public ResultSet executeWithPayload(String query, CustomPayload customPayload) {
+        return executeWithPayload(new SimpleStatement(query), customPayload);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ResultSet execute(String query, CustomPayload customPayload, Object... values) {
-        return execute(new SimpleStatement(query, values), customPayload);
+    public ResultSet executeWithPayload(String query, CustomPayload customPayload, Object... values) {
+        return executeWithPayload(new SimpleStatement(query, values), customPayload);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ResultSet execute(Statement statement, CustomPayload customPayload) {
-        return executeAsync(statement, customPayload).getUninterruptibly();
+    public ResultSet executeWithPayload(Statement statement, CustomPayload customPayload) {
+        return executeAsyncWithPayload(statement, customPayload).getUninterruptibly();
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ResultSetFuture executeAsync(String query, CustomPayload customPayload) {
-        return executeAsync(new SimpleStatement(query), customPayload);
+    public ResultSetFuture executeAsyncWithPayload(String query, CustomPayload customPayload) {
+        return executeAsyncWithPayload(new SimpleStatement(query), customPayload);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ResultSetFuture executeAsync(String query, CustomPayload customPayload, Object... values) {
-        return executeAsync(new SimpleStatement(query, values), customPayload);
+    public ResultSetFuture executeAsyncWithPayload(String query, CustomPayload customPayload, Object... values) {
+        return executeAsyncWithPayload(new SimpleStatement(query, values), customPayload);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public PreparedStatement prepare(String query, CustomPayload customPayload) {
+    public PreparedStatement prepareWithPayload(String query, CustomPayload customPayload) {
         try {
-            return Uninterruptibles.getUninterruptibly(prepareAsync(query, customPayload));
+            return Uninterruptibles.getUninterruptibly(prepareAsyncWithPayload(query, customPayload));
         } catch (ExecutionException e) {
             throw DefaultResultSetFuture.extractCauseFromExecutionException(e);
         }
@@ -84,9 +84,9 @@ public abstract class AbstractCustomPayloadAwareSession extends AbstractSession 
      * {@inheritDoc}
      */
     @Override
-    public PreparedStatement prepare(RegularStatement statement, CustomPayload customPayload) {
+    public PreparedStatement prepareWithPayload(RegularStatement statement, CustomPayload customPayload) {
         try {
-            return Uninterruptibles.getUninterruptibly(prepareAsync(statement, customPayload));
+            return Uninterruptibles.getUninterruptibly(prepareAsyncWithPayload(statement, customPayload));
         } catch (ExecutionException e) {
             throw DefaultResultSetFuture.extractCauseFromExecutionException(e);
         }
@@ -96,11 +96,11 @@ public abstract class AbstractCustomPayloadAwareSession extends AbstractSession 
      * {@inheritDoc}
      */
     @Override
-    public ListenableFuture<PreparedStatement> prepareAsync(final RegularStatement statement, CustomPayload customPayload) {
+    public ListenableFuture<PreparedStatement> prepareAsyncWithPayload(final RegularStatement statement, CustomPayload customPayload) {
         if (statement.hasValues())
             throw new IllegalArgumentException("A statement to prepare should not have values");
 
-        ListenableFuture<PreparedStatement> prepared = prepareAsync(statement.toString(), customPayload);
+        ListenableFuture<PreparedStatement> prepared = prepareAsyncWithPayload(statement.toString(), customPayload);
         return Futures.transform(prepared, new Function<PreparedStatement, PreparedStatement>() {
             @Override
             public PreparedStatement apply(PreparedStatement prepared) {
@@ -122,12 +122,12 @@ public abstract class AbstractCustomPayloadAwareSession extends AbstractSession 
      */
     @Override
     public ResultSetFuture executeAsync(Statement statement) {
-        return executeAsync(statement, null);
+        return executeAsyncWithPayload(statement, null);
     }
 
     @Override
     public ListenableFuture<PreparedStatement> prepareAsync(String query) {
-        return prepareAsync(query, null);
+        return prepareAsyncWithPayload(query, null);
     }
 
 }
