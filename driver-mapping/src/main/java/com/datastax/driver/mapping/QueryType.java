@@ -15,7 +15,10 @@
  */
 package com.datastax.driver.mapping;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import com.google.common.base.Objects;
 
@@ -23,6 +26,7 @@ import com.datastax.driver.core.TableMetadata;
 import com.datastax.driver.core.querybuilder.Delete;
 import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.Select;
+
 import static com.datastax.driver.core.querybuilder.QueryBuilder.*;
 
 class QueryType {
@@ -56,7 +60,7 @@ class QueryType {
         return new QueryType(reversed ? Kind.REVERSED_SLICE : Kind.SLICE, startBoundSize, startInclusive, endBoundSize, endInclusive);
     }
 
-    String makePreparedQueryString(TableMetadata table, EntityMapper<?> mapper) {
+    String makePreparedQueryString(TableMetadata table, EntityMapper<?> mapper, SaveOptions options) {
         switch (kind) {
             case SAVE:
                 {
@@ -65,6 +69,9 @@ class QueryType {
                                   : insertInto(table);
                     for (ColumnMapper<?> cm : mapper.allColumns())
                         insert.value(cm.getColumnName(), bindMarker());
+                    if (options != null){
+                        addSaveOptions(insert, options);
+                    }
                     return insert.toString();
                 }
             case GET:
@@ -137,6 +144,16 @@ class QueryType {
         }
         throw new AssertionError();
     }
+    
+    private void addSaveOptions(Insert insert, SaveOptions so){
+        if (so.getTtlValue() != -1 && so.getTimestampValue() != -1) {
+            insert.using(ttl(bindMarker("ttlvalue"))).and(timestamp(bindMarker("tsvalue")));
+        } else if (so.getTtlValue() != -1) {
+            insert.using(ttl(bindMarker("ttlvalue")));
+        } else if (so.getTimestampValue() != -1) {
+            insert.using(timestamp(bindMarker("tsvalue")));
+        }
+    }
 
     @Override
     public boolean equals(Object obj) {
@@ -156,5 +173,67 @@ class QueryType {
     @Override
     public int hashCode() {
         return Objects.hashCode(kind, startBoundSize, startInclusive, endBoundSize, endInclusive);
+    }
+
+    /**
+     * An object to allow defining specific options during a
+     * {@link com.datastax.driver.mapping.Mapper#save} operation.
+     *
+     * The options will be added as : 'INSERT [...] USING option-name option-value [AND option-name option value ...].
+     */
+    public static class SaveOptions{
+        private int ttlValue;
+        private long timestampValue;
+
+        /**
+         * Creates an empty object to set up.
+         */
+        public SaveOptions(){
+            ttlValue = -1;
+            timestampValue = -1;
+        }
+
+        /**
+         * Get the TTL value configured in the object.
+         *
+         * @return the TTL value.
+         */
+        public int getTtlValue() {
+            return ttlValue;
+        }
+
+        /**
+         * Set the TTL value to use for the aimed save operation.
+         *
+         * NOTE : To reset this field and giving it no effect this needs to be set at -1.
+         * @param ttlValue
+         * @return the SaveOptions object affected by the set of the field.
+         */
+        public SaveOptions setTtlValue(int ttlValue) {
+            this.ttlValue = ttlValue;
+            return this;
+        }
+
+        /**
+         * Get the TTL value configured in the object.
+         *
+         * @return the TTL value.
+         */
+        public long getTimestampValue() {
+            return timestampValue;
+        }
+
+        /**
+         * Set the TIMESTAMP value to use for the aimed save operation.
+         * <p/>
+         * NOTE : To reset this field and giving it no effect this needs to be set at -1.
+         *
+         * @param timestampValue
+         * @return the SaveOptions object affected by the set of the field.
+         */
+        public SaveOptions setTimestampValue(long timestampValue) {
+            this.timestampValue = timestampValue;
+            return this;
+        }
     }
 }

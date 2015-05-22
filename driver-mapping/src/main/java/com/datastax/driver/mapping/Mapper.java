@@ -15,15 +15,13 @@
  */
 package com.datastax.driver.mapping;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,12 +44,14 @@ public class Mapper<T> {
     final TableMetadata tableMetadata;
 
     // Cache prepared statements for each type of query we use.
-    private volatile Map<QueryType, PreparedStatement> preparedQueries = Collections.<QueryType, PreparedStatement>emptyMap();
+    private volatile ConcurrentMap<String, PreparedStatement> preparedQueries = new ConcurrentHashMap<String, PreparedStatement>();
 
     private static final Function<Object, Void> NOOP = Functions.<Void>constant(null);
 
     final Function<ResultSet, T> mapOneFunction;
     final Function<ResultSet, Result<T>> mapAllFunction;
+
+    private QueryType.SaveOptions saveOptions;
 
     Mapper(MappingManager manager, Class<T> klass, EntityMapper<T> mapper) {
         this.manager = manager;
@@ -72,26 +72,19 @@ public class Mapper<T> {
                 return Mapper.this.map(rs);
             }
         };
+        this.preparedQueries.clear();
     }
 
     Session session() {
         return manager.getSession();
     }
 
-    PreparedStatement getPreparedQuery(QueryType type) {
-        PreparedStatement stmt = preparedQueries.get(type);
-        if (stmt == null) {
-            synchronized (preparedQueries) {
-                stmt = preparedQueries.get(type);
-                if (stmt == null) {
-                    String query = type.makePreparedQueryString(tableMetadata, mapper);
-                    logger.debug("Preparing query {}", query);
-                    stmt = session().prepare(query);
-                    Map<QueryType, PreparedStatement> newQueries = new HashMap<QueryType, PreparedStatement>(preparedQueries);
-                    newQueries.put(type, stmt);
-                    preparedQueries = newQueries;
-                }
-            }
+    PreparedStatement getPreparedQuery(QueryType type){
+        String queryString = type.makePreparedQueryString(tableMetadata, mapper, saveOptions);
+        PreparedStatement stmt = preparedQueries.get(queryString);
+        if (stmt == null){
+            stmt = session().prepare(queryString);
+            preparedQueries.putIfAbsent(queryString, stmt);
         }
         return stmt;
     }
@@ -127,6 +120,15 @@ public class Mapper<T> {
             bs.setBytesUnsafe(i++, value == null ? null : cm.getDataType().serialize(value, protocolVersion));
         }
 
+        if (this.saveOptions != null) {
+            if (this.saveOptions.getTtlValue() != -1) {
+                bs.setInt("ttlvalue", saveOptions.getTtlValue());
+            }
+            if (this.saveOptions.getTimestampValue() != -1) {
+                bs.setLong("tsvalue", saveOptions.getTimestampValue());
+            }
+            this.saveOptions = null;
+        }
         if (mapper.writeConsistency != null)
             bs.setConsistencyLevel(mapper.writeConsistency);
         return bs;
@@ -144,6 +146,18 @@ public class Mapper<T> {
     }
 
     /**
+     * Save an entity mapped by this mapper and using special options for save.
+     * <p/>
+     *
+     * @param entity the entity to save.
+     * @param options the options object specified defining special options when saving.
+     */
+    public void save(T entity, QueryType.SaveOptions options) {
+        this.saveOptions = options;
+        session().execute(saveQuery(entity));
+    }
+
+    /**
      * Save an entity mapped by this mapper asynchonously.
      * <p>
      * This method is basically equivalent to: {@code getManager().getSession().executeAsync(saveQuery(entity))}.
@@ -152,6 +166,18 @@ public class Mapper<T> {
      * @return a future on the completion of the save operation.
      */
     public ListenableFuture<Void> saveAsync(T entity) {
+        return Futures.transform(session().executeAsync(saveQuery(entity)), NOOP);
+    }
+
+    /**
+     * Save an entity mapped by this mapper asynchonously and using special options for save.
+     * <p/>
+     *
+     * @param entity the entity to save.
+     * @return a future on the completion of the save operation.
+     */
+    public ListenableFuture<Void> saveAsync(T entity, QueryType.SaveOptions options) {
+        this.saveOptions = options;
         return Futures.transform(session().executeAsync(saveQuery(entity)), NOOP);
     }
 
